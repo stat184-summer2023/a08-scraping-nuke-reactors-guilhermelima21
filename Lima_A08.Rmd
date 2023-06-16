@@ -1,0 +1,136 @@
+---
+title: "Activity: Nuclear Reactors"
+author: "Guilherme Lima"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(lubridate)
+```
+
+## Scrape the Data 
+
+```{r}
+wiki <- "https://en.wikipedia.org/wiki/List_of_commercial_nuclear_reactors"
+reactors <- wiki %>%
+  read_html() %>%
+  html_nodes(css = "table") %>%
+  html_table(fill = TRUE)
+japaneseReactors <- reactors[[21]]
+```
+
+
+## Your turn: In what ways is the table tidy? How is it not tidy? What’s different about it from a tidy table?
+
+My answer here..... 
+
+The table is tidy because the values are mostly filled for each row.
+The table is tidy because the type of value is mostly consistent for each row.
+
+
+The header row is also on the first row. 
+The correct first row of data is shifted over.
+Some values contain numbers like [35] which refer to a hyperlink on wikipedia. 
+
+It's different from a tidy table because a tidy table would not have any of the above flaws.
+
+
+```{r}
+head(japaneseReactors)
+#we can see that for some reason the header has duplicated to the first row, and the "correct" first row of data from the wiki table is shifted to the right of the header information on the first row
+
+#ncol(japaneseReactors), check how many columns are in the dataframe
+
+subsetReactors <- japaneseReactors[1, 10:18]
+#take the correct first row of data from the last 9 columns 
+
+originalReactors <- japaneseReactors[, 1:9]
+#since columns 10:18 are N/A because of the awkward shift from the first row data, subset the first 9 rows of actual information
+
+originalReactors <- originalReactors[-1,]
+#remove the first row of data from our original dataframe since it is duplicate column data
+
+colnames(subsetReactors) <- colnames(originalReactors)
+#make the names of the columns the same for both dataframes
+
+Japan <- rbind(subsetReactors[1, ], originalReactors)
+#use rbind to combine the first row of the subsetReactors dataframe into the first row of the originalReactors dataframe
+
+head(Japan)
+#now it looks correct
+```
+```{r}
+JapanRenamed <- Japan %>% rename(name = "Plantname",
+                          unitNo = "UnitNo.",
+                          type = "Type",
+                          model = "Model",
+                          status = "Status",
+                          capacityMW = "Capacity(MW)",
+                          construction = "Beginbuilding",
+                          operation = "Commercialoperation",
+                          closure = "Closed") 
+
+
+
+JapanMutated <- JapanRenamed %>% mutate(capacityMW=as.numeric(capacityMW),
+                          construction = dmy(construction),
+                          operation = dmy(operation),
+                          closure = dmy(closure))  
+
+```
+
+
+## Your Turn: Plot Net Generation Capacity vs Construction Date
+
+```{r}
+JapanMutated %>% 
+  ggplot(aes(x = construction, y = capacityMW)) +
+  geom_point(aes(color = type))
+
+```
+
+
+## Your Turn: Scrape & Clean China Data (then merge with Japan)
+
+```{r}
+chinaReactors <- reactors[[10]] 
+subsetChina <- chinaReactors[1, 10:18]
+originalChinaReactors <- chinaReactors[, 1:9]
+originalChinaReactors <- originalChinaReactors[-1,]
+colnames(subsetChina) <- colnames(originalChinaReactors)
+China <- rbind(subsetChina[1, ], originalChinaReactors)
+China[2,] <- China[1,]
+China[2,2] <- "2"
+```
+
+```{r}
+ChinaRenamed <- China %>% rename(name = "Plantname",
+                          unitNo = "UnitNo.",
+                          type = "Type",
+                          model = "Model",
+                          status = "Status",
+                          capacityMW = "Capacity(MW)",
+                          construction = "Beginbuilding",
+                          operation = "Commercialoperation",
+                          closure = "Closed") 
+
+
+ChinaMutated <- ChinaRenamed %>% mutate(capacityMW=as.numeric(capacityMW),
+                          construction = dmy(construction),
+                          operation = dmy(operation),
+                          closure = dmy(closure))  
+
+bindedCountries <- bind_rows(JapanMutated, ChinaMutated)
+```
+
+
+## Your Turn: Reconstruct Info Graphic of Japan Reactors (or other country of interest)
+
+```{r fig.height=20, fig.width=20}
+JapanMutated %>% mutate(reactorUnit = paste(name, unitNo)) %>% mutate(status_change = !is.na(status)) %>% 
+  ggplot(aes(x= operation,y=ReactorID)) +
+  geom_segment(aes(x = construction, y = reactorUnit, xend = operation, yend = reactorUnit, color = type)) + geom_point(aes(x = closure, y = reactorUnit, shape = status_change)) 
+
+```
